@@ -1,7 +1,13 @@
 # Satellite-Rendezvous-Using-Trick
 A Trick sim of one satellite rendezvousing with another in low Earth orbit.
 
-[![Watch the video](https://raw.githubusercontent.com/lindolfo1/Satellite-Rendezvous-Using-Trick/refs/heads/main/assets/demo_thumbnail.png)](https://github.com/lindolfo1/Satellite-Rendezvous-Using-Trick/raw/refs/heads/main/assets/demo_1.mp4)   
+
+
+https://github.com/user-attachments/assets/003aa152-1b70-45f8-9189-77a132289d50
+
+
+
+
 
 Both vehicles are in a 500 km circular orbit. The target coasts while the chaser
 starts about a kilometer away at a random point at most 45 degrees from the back
