@@ -1,6 +1,8 @@
 # Satellite-Rendezvous-Using-Trick
 A Trick sim of one satellite rendezvousing with another in low Earth orbit.
 
+![Demo]([https://github.com/user-attachments/assets/your-video-id](https://github.com/lindolfo1/Satellite-Rendezvous-Using-Trick/blob/main/assets/demo_1.mp4))   
+
 Both vehicles are in a 500 km circular orbit. The target coasts while the chaser
 starts about a kilometer away at a random point at most 45 degrees from the back
 of the target, and has to park 20 m behind the target satellite by stopping at
