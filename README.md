@@ -3,7 +3,10 @@ A Trick sim of one satellite rendezvousing with another in low Earth orbit.
 
 
 
-https://github.com/user-attachments/assets/003aa152-1b70-45f8-9189-77a132289d50
+
+
+https://github.com/user-attachments/assets/9619d791-254c-4c13-80cc-baccf9675db1
+
 
 
 
