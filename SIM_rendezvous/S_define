@@ -1,0 +1,117 @@
+/************************TRICK HEADER*************************
+PURPOSE:
+    (SIM_rendezvous)
+
+LIBRARY DEPENDENCIES:
+    ((satellite/src/satellite.cpp)
+    (satellite/src/rangefinder.cpp)
+    (satellite/src/imu.cpp)
+    (satellite/src/relative_nav.cpp)
+    (satellite/src/guidance.cpp)
+    (satellite/src/thruster.cpp)
+    (satellite/src/attitude_sensor.cpp)
+    (satellite/src/attitude_nav.cpp)
+    (satellite/src/orbit_util.cpp)
+    (satellite/src/target_ephemeris.cpp)
+    (satellite/src/misc_util.cpp))
+*************************************************************/
+
+#include "sim_objects/default_trick_sys.sm"
+
+##include "satellite/include/satellite.hh"
+##include "trick/exec_proto.h"
+
+#define IMU_RATE        0.1     /* s -- IMU sampling and EKF time update */
+#define ATT_SENSOR_RATE 1.0     /* s -- IMU sampling and EKF time update */
+#define RANGE_RATE      1.0     /* s -- rangefinder and EKF measurement update */
+#define GUIDE_RATE      5.0     /* s -- guidance, 0.1 Hz */
+#define THRUSTER_RATE   0.01    /* s -- thruster refresh rate */
+#define SIM_RATE        0.005    /* s -- sim refresh rate */
+
+/*----------------------------------------------------------------
+ * One vehicle: truth dynamics + onboard IMU.
+ * Instantiated twice (chaser, target); the input file differentiates them.
+ *---------------------------------------------------------------*/
+class SatelliteSimObject : public Trick::SimObject {
+    public:
+        Satellite sat;
+
+        SatelliteSimObject() {
+            ("default_data")        sat.default_data();
+            ("initialization")      sat.initialize();
+            /* Truth attitude must be valid before the first track() call,
+               which happens in the scheduled class below. */
+            ("initialization")      sat.update_truth_attitude();
+
+            ("derivative")          sat.derivative();
+            ("integration")         trick_ret = sat.integ();
+
+            /* attitude, then history shift, then sampling (order matters). */
+            (IMU_RATE, "scheduled") sat.update_truth_attitude();
+            (IMU_RATE, "scheduled") sat.update_pos_history();
+            (IMU_RATE, "scheduled") sat.imu.sample_imu(sat.posHistory[0],
+                                                       sat.posHistory[1],
+                                                       sat.posHistory[2]);
+
+            ("shutdown")            sat.shutdown();
+        }
+
+    private:
+        SatelliteSimObject(const SatelliteSimObject &);
+        SatelliteSimObject & operator=(const SatelliteSimObject &);
+};
+
+
+/*----------------------------------------------------------------
+ * Sensing -> navigation -> guidance. Separate from the vehicle because
+ * it needs BOTH vehicles.
+ *---------------------------------------------------------------*/
+class RendezvousSimObject : public Trick::SimObject {
+    public:
+        RendezvousSimObject(Satellite & chaser, Satellite & target) {
+            /* Ephemeris first: navigate_initialize seeds xHat from the
+               onboard target state, which is still zeroed until this
+               runs. */
+            ("initialization")              chaser.sat.update_target_ephemeris(target.sat);
+            ("initialization")              chaser.sat.navigate_initialize();
+            
+            /* EKF time update: advance state, grow covariance. */
+            (IMU_RATE, "scheduled")         chaser.sat.update_target_ephemeris(target.sat);
+            (IMU_RATE, "scheduled")         chaser.sat.att_propagate();
+            (IMU_RATE, "scheduled")         chaser.sat.navigate_propagate();
+
+            (ATT_SENSOR_RATE, "scheduled")  chaser.sat.att_update();
+
+            /* Rangefinder truth measurement. Must run AFTER this cycle's
+               navigate_propagate() and BEFORE navigate_update(), so the
+               measurement is neither stale nor a cycle ahead. */
+            (RANGE_RATE, "scheduled")       chaser.sat.track(target.sat);
+
+            /* EKF measurement update: correct state, shrink covariance. */
+            (RANGE_RATE, "scheduled")       chaser.sat.navigate_update();
+
+            (GUIDE_RATE, "scheduled")       chaser.sat.guide();
+            (THRUSTER_RATE, "scheduled")    chaser.sat.thrustUpdate();
+        }
+
+    private:
+        RendezvousSimObject(const RendezvousSimObject &);
+        RendezvousSimObject & operator=(const RendezvousSimObject &);
+};
+
+SatelliteSimObject chaser;
+SatelliteSimObject target;
+
+RendezvousSimObject rendezvous(chaser.sat, target.sat);
+
+/* Integration loops. The 0.005 is a default; pick the integrator from the
+ * input file, no rebuild needed:
+ *
+ *     chaser_integloop.getIntegrator(trick.Runge_Kutta_4, 6)
+ *
+ * The 6 is the state count (3 position + 3 velocity) and must match what
+ * load_state() passes in Satellite::integ(). A mismatch compiles, runs,
+ * and silently integrates garbage.
+ */
+IntegLoop chaser_integloop(SIM_RATE) chaser;
+IntegLoop target_integloop(SIM_RATE) target;
