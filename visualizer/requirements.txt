@@ -1,0 +1,7 @@
+# The viewer renders in the browser with a vendored copy of three.js, so the
+# Python side only loads and derives. No plotting library: an earlier version
+# used Plotly and it was dropped at Stage 0 -- see the README on why the render
+# loop lives in the browser.
+streamlit>=1.40
+numpy>=1.26
+pandas>=2.0
