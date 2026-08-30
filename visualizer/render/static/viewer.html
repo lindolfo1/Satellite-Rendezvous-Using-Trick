@@ -1,0 +1,284 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  Viewer shell — spec 10 layout.
+
+  Markup only. Four double-underscore slots are filled by
+  render/component.py: the stylesheet, the run metadata as JSON, the base64
+  float32 sample block (empty when no run is loaded), and the concatenated js/
+  modules. Each slot must appear exactly once -- component.py asserts it,
+  because in Stage 0 a slot name written into a comment was substituted too and
+  silently doubled the payload. Describe them, do not spell them.
+
+  Everything is inlined because Streamlit's components.html renders into a
+  srcdoc iframe, where relative URLs do not resolve. See component.py.
+
+  Panel structure is final as of Stage 1: later stages fill the bodies, they do
+  not move the panels. Each panel's fields carry the ids that js/30_hud.js
+  writes to.
+-->
+<style>__CSS__</style>
+
+<div id="root">
+  <canvas id="gl"></canvas>
+
+  <div id="empty">
+    <strong>No run selected</strong>
+    <div>Choose a run in the sidebar.</div>
+  </div>
+
+  <!-- Spec 8 · top-left · <= 20% width -->
+  <section class="panel" id="p_stats">
+    <h4>Chaser</h4>
+    <div class="row"><span>Δv accumulated</span><span id="f_dv">—</span></div>
+    <div class="row"><span>waypoint</span><span id="f_wp">—</span></div>
+    <div class="row"><span>to waypoint</span><span id="f_wpdist">—</span></div>
+    <div class="row"><span>true range</span><span id="f_range">—</span></div>
+    <div class="row"><span>position</span><span id="f_cpos">—</span></div>
+    <div class="sub" id="f_calt">—</div>
+    <div class="row"><span>velocity</span><span id="f_cvel">—</span></div>
+    <div class="sub" id="f_cvel_xyz">—</div>
+    <div class="row"><span>thrust acc</span><span id="f_cacc">—</span></div>
+    <div class="sub" id="f_cacc_xyz">—</div>
+    <div class="row"><span>state</span><span id="f_thrust">—</span></div>
+    <div class="row"><span>nav error</span><span id="f_naverr">—</span></div>
+    <div class="sub" id="f_naverr_xyz">—</div>
+    <div class="row"><span>attitude error</span><span id="f_navatt">—</span></div>
+    <div class="sub" id="f_navatt_xyz">—</div>
+
+    <h4>Target</h4>
+    <div class="row"><span>position</span><span id="f_tpos">—</span></div>
+    <div class="sub" id="f_talt">—</div>
+    <div class="row"><span>velocity</span><span id="f_tvel">—</span></div>
+    <div class="sub" id="f_tvel_xyz">—</div>
+    <div class="row"><span>range from chaser</span><span id="f_trange">—</span></div>
+    <div class="row"><span>chaser in tgt LVLH</span><span id="f_rvh">—</span></div>
+    <div class="sub" id="f_rvh_lbl">R · V · H</div>
+  </section>
+
+  <!-- Spec 9 · top-right · hover reveals each view's purpose -->
+  <section class="panel" id="p_views">
+    <h4>View</h4>
+    <div id="view_buttons"></div>
+    <div id="keyhints" class="muted" style="margin-top:8px;font-size:10px;line-height:1.6">
+      <div><b>W A S D</b> <span id="hint_wasd">rotate</span></div>
+      <div><b>Q / E</b> zoom out / in &nbsp; <b>R</b> recentre</div>
+      <div><b>Shift</b> faster &nbsp; <b>Space</b> play</div>
+      <div><b>← →</b> step &nbsp; <b>Home/End</b> ends</div>
+    </div>
+  </section>
+
+  <!-- Spec 9b/10 · bottom-left. The frame counter stacks above the panel
+       rather than floating, so neither has to know the other's height. -->
+  <!-- Cinematic mode: pane pickers over three quadrants, a stats card in the
+       fourth. Overlaid on the canvas, which renders the panes itself. -->
+  <div id="cine" hidden>
+    <div class="cine_pick" style="left:var(--gap); top:var(--gap)">
+      <select id="pane0"></select>
+    </div>
+    <div class="cine_pick" style="right:var(--gap); top:var(--gap)">
+      <select id="pane1"></select>
+    </div>
+    <div class="cine_pick" style="left:var(--gap); top:calc(50% + var(--gap))">
+      <select id="pane2"></select>
+    </div>
+    <section id="cine_card">
+      <!-- One left axis, one vertical rhythm. Grouping is done with space, not
+           rules; the only right-aligned thing is the transport, because it is
+           the only element the viewer is not reading. -->
+      <div class="tools">
+        <details id="c_menu">
+          <summary aria-label="cinematic settings">⚙</summary>
+          <div class="menu_body">
+            <p class="menu_head">overlays</p>
+            <label><input type="checkbox" id="m_nav"> nav position</label>
+            <label><input type="checkbox" id="m_att"> nav attitude</label>
+            <label><input type="checkbox" id="m_track"> nav estimate track</label>
+            <label><input type="checkbox" id="m_flash" checked>
+              flash station-keeping burns</label>
+
+            <p class="menu_head">pacing</p>
+            <label><input type="checkbox" id="m_ease" checked> slow near waypoints</label>
+            <label class="slider">within
+              <input type="range" id="m_range" min="10" max="300" step="10" value="60">
+              <output id="m_range_out">60 m</output>
+            </label>
+            <label class="slider">down to
+              <input type="range" id="m_floor" min="2" max="50" step="1" value="12">
+              <output id="m_floor_out">12%</output>
+            </label>
+          </div>
+        </details>
+        <button id="c_exit" aria-label="leave cinematic mode">✕</button>
+      </div>
+
+      <p class="eyebrow"><span id="c_phase">approach</span><time id="c_elapsed">0:00</time></p>
+
+      <div class="hero">
+        <p class="label">range to target</p>
+        <b id="c_range">—</b>
+        <p class="under"><i id="c_arrow">▼</i><span id="c_closing">—</span> closing</p>
+      </div>
+
+      <div class="figures">
+        <div><p class="label">&Delta;v expended</p><b id="c_dv">—</b></div>
+        <div><p class="label">nav error</p><b id="c_nav">—</b></div>
+      </div>
+
+      <div class="strip">
+        <p class="label">corridor</p>
+        <div class="rail" id="c_rail"></div>
+      </div>
+
+      <div class="strip">
+        <p class="label">burns and arrivals</p>
+        <div class="timeline" id="c_timeline">
+          <div class="track" id="c_track"></div>
+          <div class="head" id="c_head"></div>
+        </div>
+      </div>
+
+      <footer>
+        <button id="c_restart" aria-label="restart from the beginning">↺</button>
+        <button id="c_play" aria-label="play or pause">▶</button>
+        <div class="rates" id="c_rates"></div>
+        <span class="eased" id="c_speed_note"></span>
+      </footer>
+    </section>
+  </div>
+
+  <div id="bottom_left">
+  <div id="fps">—</div>
+  <section class="panel" id="p_options">
+    <h4>View options</h4>
+    <div class="ctl">
+      <button id="t_imu" aria-pressed="false">IMU Δv</button>
+      <button id="t_rf" aria-pressed="false">rangefinder</button>
+    </div>
+    <div class="ctl">
+      <button id="t_arrowscale" aria-pressed="false">relative scale</button>
+      <button id="t_graticule" aria-pressed="false">graticule</button>
+      <button id="t_cine" aria-pressed="false">cinematic</button>
+    </div>
+    <div class="ctl">
+      <button id="t_nav" aria-pressed="false">nav position</button>
+      <button id="t_attnav" aria-pressed="false">nav attitude</button>
+    </div>
+    <div class="sub" id="nav_note" style="text-align:left"></div>
+    <div class="sub" id="att_note" style="text-align:left"></div>
+
+    <h4>Frames</h4>
+    <div class="ctl">
+      <button id="t_eci" aria-pressed="false">ECI</button>
+      <button id="t_body" aria-pressed="false">sensor</button>
+      <button id="t_lvlh" aria-pressed="false">LVLH</button>
+      <button id="t_navframe" aria-pressed="false">believed</button>
+    </div>
+    <div class="sub" id="frame_legend" style="text-align:left">—</div>
+    <div class="sub" id="lvlh_angle" style="text-align:left"></div>
+
+    <div class="sub" id="burn_legend" style="text-align:left">—</div>
+
+    <div id="sensor_readout" class="muted" style="margin-top:8px">
+      No sensor selected.
+    </div>
+  </section>
+  </div>
+
+  <!-- Spec 10 · bottom-right -->
+  <section class="panel" id="p_status">
+    <h4>Status</h4>
+    <div class="row"><span>run</span><span id="f_run">—</span></div>
+    <div class="row"><span>UTC start</span><span id="f_utc0">—</span></div>
+    <div class="row"><span>sample</span><span id="f_sample">—</span></div>
+    <div class="row"><span>waypoint base</span><span id="f_wpbase">—</span></div>
+    <div class="row"><span>GMST</span><span id="f_gmst">—</span></div>
+    <div class="row"><span>events</span><span id="f_events">—</span></div>
+    <div class="row"><span>ΣΔv burns</span><span id="f_dvsum">—</span></div>
+    <div class="row"><span>line of sight</span><span id="f_los">—</span></div>
+    <div class="ctl"><button id="t_units" aria-pressed="false">units: auto</button></div>
+  </section>
+
+  <!-- Spec 7 · bottom centre · wide and short -->
+  <section class="panel" id="p_time">
+    <div id="timeline"><div id="playhead"></div></div>
+    <input type="range" id="scrub" min="0" max="0" value="0" step="1"
+           aria-label="Scrub through sim time">
+    <div class="ctl">
+      <button id="b_play" aria-label="Play or pause">▶</button>
+      <button id="b_start" aria-label="Jump to start">⏮</button>
+      <button id="b_prev" aria-label="Step back one sample">◀</button>
+      <button id="b_next" aria-label="Step forward one sample">▶|</button>
+      <button id="b_end" aria-label="Jump to end">⏭</button>
+      <button id="b_prevev" aria-label="Previous event">⤝ev</button>
+      <button id="b_nextev" aria-label="Next event">ev⤞</button>
+      <span id="rate_buttons"></span>
+      <input type="range" id="rate_fine" min="0" max="100" value="0"
+             style="width:80px" aria-label="Fine playback rate">
+      <span class="row" style="flex:1">
+        <span id="f_elapsed">—</span><span id="f_utc">—</span>
+      </span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* Boot watchdog. An ES module that throws -- or whose bare import cannot be
+ * fetched -- fails silently: no listeners, no render, and the empty state stays
+ * up because the code that hides it never ran. That looks exactly like "the
+ * viewer works but nothing responds", which is a miserable thing to diagnose
+ * from the outside. So any failure gets painted onto the page instead. */
+window.__viewerBooted = false;
+window.__fail = function (msg, detail) {
+  var el = document.getElementById('empty');
+  if (!el) return;
+  el.hidden = false;
+  el.innerHTML =
+    '<strong style="color:#ef5350">Viewer failed to start</strong>' +
+    '<div style="max-width:64ch;white-space:pre-wrap;text-align:left">' +
+    String(msg) + (detail ? '\n\n' + detail : '') + '</div>';
+};
+window.addEventListener('error', function (ev) {
+  window.__fail(ev.message || 'script error',
+                ev.filename ? ev.filename + ':' + ev.lineno : '');
+});
+window.addEventListener('unhandledrejection', function (ev) {
+  window.__fail('Unhandled rejection: ' + ev.reason);
+});
+setTimeout(function () {
+  if (window.__viewerBooted) return;
+  window.__fail(
+    'The viewer module never finished loading.',
+    'Nothing threw, so the most likely cause is that three.js could not be ' +
+    'fetched. Check the browser console\u2019s Network tab for a failed ' +
+    'request to unpkg.com, and the Console tab for a CSP or import error.');
+}, 4000);
+</script>
+
+<!-- three.js, vendored. Held as inert text and imported from a blob URL, so
+     there is no network request at runtime and nothing to fail. -->
+<script type="text/plain" id="three-src">__THREE__</script>
+
+<script type="module">
+const META = __META__;
+const PAYLOAD = "__PAYLOAD__";
+const EARTH_TEXTURE = "__EARTH_TEXTURE__";
+/*__THREE_BOOT_START__*/
+/* Two independent ways to get three.js, because this iframe has an opaque
+ * origin and a blob import is not guaranteed to be allowed there. Preferred:
+ * the vendored copy above, via a blob URL, with no network at all. Fallback:
+ * the CDN, which needs no import map when the URL is absolute. If both fail the
+ * watchdog says so instead of leaving a dead page. */
+let THREE;
+try {
+  THREE = await import(URL.createObjectURL(new Blob(
+    [document.getElementById('three-src').textContent],
+    { type: 'text/javascript' })));
+} catch (err) {
+  console.warn('vendored three.js failed, trying the CDN:', err);
+  THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+}
+/*__THREE_BOOT_END__*/
+__JS__
+</script>

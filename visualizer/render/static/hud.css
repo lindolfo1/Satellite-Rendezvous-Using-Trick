@@ -1,0 +1,402 @@
+/* HUD layout — spec 10.
+ *
+ * Spec 10 describes four corner panels around a render area with time controls
+ * bottom centre. That is a HUD, so it is absolute positioning over a canvas
+ * rather than a document flow.
+ *
+ * Two constraints from the spec are load-bearing here and are marked where
+ * they apply: the stats panel stays within 20% of screen width, and the view
+ * options panel's right edge aligns with the stats panel's right edge.
+ */
+
+:root {
+  --bg: #0b0f14;
+  --ink: #d7e1ea;
+  --dim: #7d8b99;
+  --chaser: #4fc3f7;
+  --target: #ff8a65;
+  --past: #8fa8bf;
+  --future: #3a4450;
+  --warn: #ef5350;
+  --stale: #6b6b6b;
+  --panel: rgba(14, 20, 28, 0.82);
+  --edge: rgba(120, 150, 180, 0.22);
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* Spec 10: stats <= 20% of width. The options panel inherits the same width
+   * so its right edge aligns, which is the spec's actual requirement. */
+  --panel-w: 20%;
+  --panel-w-min: 200px;
+  --gap: 10px;
+  /* Measured height of the time panel (timeline strip + scrubber + control
+   * row). The bottom-corner panels clear it by --gap; if the time panel grows,
+   * this is the one number to change. */
+  --time-h: 92px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  color: var(--ink);
+  font: 12px/1.45 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { position: relative; width: 100%; height: 100vh; }
+#gl { display: block; width: 100%; height: 100%; }
+
+/* Empty state, until a run is loaded in Stage 3. */
+#empty {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; gap: 6px; text-align: center;
+  color: var(--dim); pointer-events: none;
+}
+/* `hidden` alone does not win against the `display: grid` above -- an id
+ * selector outranks the browser's [hidden] rule, so the empty state stayed
+ * visible over a perfectly well-loaded run. */
+#empty[hidden] { display: none; }
+
+#empty strong { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+
+.panel {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 8px 10px;
+  backdrop-filter: blur(3px);
+  /* Top panels may grow until they would meet the bottom row; bottom panels
+   * until they would meet the top. Anything longer scrolls inside the panel
+   * rather than pushing into the render area. */
+  max-height: calc(50vh - var(--time-h) / 2 - var(--gap) * 2);
+  overflow: auto;
+}
+.panel[hidden] { display: none; }
+
+#p_stats   { top: var(--gap);    left: var(--gap);  width: var(--panel-w); min-width: var(--panel-w-min); }
+#p_views   { top: var(--gap);    right: var(--gap); width: 15%; min-width: 152px; }
+/* The bottom corners sit on the bottom edge, level with the time controls
+ * rather than stacked above them -- the centre panel is narrow enough that the
+ * three do not meet. */
+#bottom_left { position: absolute; bottom: var(--gap); left: var(--gap);
+               width: var(--panel-w); min-width: var(--panel-w-min);
+               display: flex; flex-direction: column; gap: 4px; }
+#bottom_left .panel { position: static; width: 100%; }
+#p_status  { bottom: var(--gap); right: var(--gap);
+             width: var(--panel-w); min-width: var(--panel-w-min); }
+#p_time    { bottom: var(--gap); left: 50%; transform: translateX(-50%);
+             width: min(56%, 660px); }
+
+h4 {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+h4:not(:first-child) { margin-top: 10px; }
+
+/* Fixed-width digits: spec 8 requires nothing jitters horizontally during
+ * playback, and tabular-nums is what actually delivers that. */
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.row > :first-child { color: var(--dim); }
+.row > :last-child { color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+
+/* Components line under a vector row. Right-aligned and tabular so the digits
+ * sit in fixed columns and nothing shifts as values change sign during
+ * playback (spec 8). */
+.sub {
+  color: var(--dim);
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  margin: -1px 0 3px;
+  overflow: hidden;
+}
+
+.k { color: var(--chaser); }
+.warn { color: var(--warn); }
+.stale { color: var(--stale); font-style: italic; }
+.muted { color: var(--dim); }
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: #1a222c;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+button:hover { background: #24303d; }
+button:focus-visible { outline: 2px solid var(--chaser); outline-offset: 1px; }
+button[aria-pressed="true"] {
+  background: var(--chaser); color: #08131a; border-color: var(--chaser);
+}
+button[disabled] { opacity: .4; cursor: not-allowed; }
+
+#p_views button { display: block; width: 100%; margin-bottom: 4px; text-align: left; }
+#p_views button small { display: block; color: inherit; opacity: .6; font-size: 10px; }
+
+.ctl { display: flex; align-items: center; gap: 6px; }
+.ctl + .ctl { margin-top: 6px; }
+
+input[type=range] { width: 100%; accent-color: var(--chaser); }
+
+/* Timeline strip — spec 7. Burn spans and waypoint ticks are absolutely
+ * positioned children on the scrubber's own time axis. */
+#timeline {
+  position: relative; height: 16px; margin-bottom: 4px;
+  border: 1px solid var(--edge); border-radius: 2px; background: #121a23;
+}
+#timeline .burn {
+  position: absolute; top: 2px; height: 12px;
+  background: #ffca28; opacity: .75; border-radius: 1px; min-width: 2px;
+}
+#timeline .wp { position: absolute; top: 0; width: 2px; height: 16px; background: var(--chaser); }
+#playhead { position: absolute; top: -2px; width: 1px; height: 20px; background: #fff; }
+
+/* Frame counter: the first row of the bottom-left stack, so it rides above the
+ * panel without either needing the other's height. */
+#fps {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  padding-left: 2px;
+}
+
+/* Spec: degrade sanely at 1280x720. Below that the corner panels would meet in
+ * the middle, so they narrow and the descriptive text drops out. */
+@media (max-width: 1400px) {
+  :root { --panel-w-min: 170px; }
+  #p_views button small { display: none; }
+}
+@media (max-height: 760px) {
+  :root { --gap: 8px; }
+  #p_views button small { display: none; }
+}
+
+
+/* ---- cinematic mode ------------------------------------------------------
+ * Three quadrants are drawn by the renderer itself; this is the furniture over
+ * them. Type is deliberately large: the target is a video watched on a phone,
+ * where the normal HUD is unreadable.
+ */
+/* Panels hide with the mode, leaving the three panes and the stats card. */
+body.cinematic .panel:not(#cine_stats),
+body.cinematic #bottom_left,
+body.cinematic #fps { display: none; }
+
+#cine { position: absolute; inset: 0; pointer-events: none; }
+#cine .cine_pick { position: absolute; pointer-events: auto; opacity: 0.55; }
+#cine .cine_pick:hover { opacity: 1; }
+#cine select {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--edge);
+  border-radius: 4px; font: inherit; font-size: 11px; padding: 2px 4px;
+}
+
+
+
+
+/* ---- the cinematic card --------------------------------------------------
+ *
+ * Read by someone who has never seen the tool, on a phone, sound off, deciding
+ * in a second whether to keep watching. Every decision below follows from that.
+ *
+ * ONE AXIS. Everything the viewer reads is left-aligned on the same line. The
+ * previous version put three figures in a right-aligned column beside the hero,
+ * which gave the eye two axes to track and a dead area between them. The only
+ * right-aligned element left is the eased-rate note, and only because it
+ * belongs to the transport rather than to the data.
+ *
+ * ONE RHYTHM. `--step` is the single vertical unit; every gap is 1, 2 or 3 of
+ * it. Nothing is spaced by eye.
+ *
+ * FOUR SIZES, and they are all in use: label, figure, hero, and the eyebrow.
+ * A fifth size would have to earn its place by carrying a distinct rank.
+ *
+ * NO RULES. Grouping is done with space. The two hairlines this had before ran
+ * under the header and above the footer, where the spacing had already grouped
+ * things -- a line that repeats what the layout says is decoration.
+ *
+ * THREE COLOURS with fixed jobs: ink for values, dim for labels, green for
+ * progress and state. Amber appears only on burns, because a burn is the one
+ * event that is neither progress nor state.
+ */
+#cine_card {
+  --step: 3.1cqh;
+
+  --t-label: 2.5cqh;    /* every label, no exceptions */
+  --t-eyebrow: 3.2cqh;  /* phase and elapsed, one rank above a label */
+  --t-figure: 6.4cqh;   /* every secondary number */
+  --t-hero: 17cqh;
+
+  --ink:   oklch(0.96 0.008 230);
+  --dim:   oklch(0.60 0.018 230);
+  --go:    oklch(0.80 0.15 152);
+  --warn:  oklch(0.80 0.13 60);
+  --sunk:  oklch(0.29 0.018 240);
+
+  container-type: size;
+  position: absolute; right: 0; bottom: 0; width: 50%; height: 50%;
+  box-sizing: border-box;
+  padding: calc(var(--step) * 1.6) calc(var(--step) * 1.6) var(--step);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: oklch(0.145 0.012 240 / 0.94);
+  color: var(--ink); pointer-events: auto;
+}
+
+#cine_card .label {
+  margin: 0 0 calc(var(--step) * 0.35);
+  font-size: var(--t-label); line-height: 1;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim);
+}
+
+/* Phase and elapsed are one line: they answer "what, and how long", which is a
+ * single question. Separated by space rather than punctuation. */
+#cine_card .eyebrow {
+  margin: 0 0 var(--step); display: flex; gap: calc(var(--step) * 0.8);
+  align-items: baseline;
+  font-size: var(--t-eyebrow); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--dim);
+}
+#cine_card .eyebrow time {
+  color: var(--ink); letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+}
+
+/* The hero owns the free space, so a short quadrant takes it from here rather
+ * than from the strips and the transport below. */
+#cine_card .hero { flex: 1 1 auto; min-height: 0; }
+#cine_card .hero b {
+  display: block; font-size: var(--t-hero); font-weight: 250; line-height: 0.86;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.03em;
+}
+/* Closing rate sits under the range because it modifies it: one fact, two
+ * lines. Reading it as a separate figure was what made it feel scattered. */
+#cine_card .hero .under {
+  margin: calc(var(--step) * 0.5) 0 0;
+  display: flex; align-items: baseline; gap: calc(var(--step) * 0.3);
+  font-size: var(--t-figure); font-variant-numeric: tabular-nums; color: var(--go);
+}
+#cine_card .hero .under i { font-style: normal; font-size: var(--t-label); }
+#cine_card .hero .under span + * { color: var(--dim); }
+#cine_card .hero .under.opening { color: var(--warn); }
+#cine_card .hero .under.holding { color: var(--dim); }
+
+#cine_card .figures {
+  flex: 0 0 auto; display: flex; gap: calc(var(--step) * 3);
+  margin-bottom: calc(var(--step) * 1.2);
+}
+#cine_card .figures b {
+  display: block; font-size: var(--t-figure); font-weight: 400;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+
+#cine_card .strip { flex: 0 0 auto; margin-bottom: calc(var(--step) * 1.2); }
+
+/* Corridor: segment widths follow the legs, so the shape of the approach is
+ * visible without reading a number. Labels sit at each segment's start, which
+ * is where that leg begins. */
+#cine_card .rail { display: flex; gap: 0.6cqw; padding-bottom: calc(var(--step) * 0.9); }
+#cine_card .rail i {
+  position: relative; height: 0.9cqh; border-radius: 0.45cqh;
+  background: var(--sunk); font-style: normal;
+  transition: background 240ms ease;
+}
+#cine_card .rail i.done { background: var(--go); }
+#cine_card .rail i.active {
+  background: linear-gradient(90deg, var(--go) 50%, var(--sunk) 50%);
+}
+#cine_card .rail i::after {
+  content: attr(data-label); position: absolute; top: 1.5cqh; left: 0;
+  font-size: var(--t-label); color: var(--dim); font-variant-numeric: tabular-nums;
+}
+
+/* Burns have duration and are bars; arrivals are instants and are ticks.
+ * Station-keeping corrections are drawn as texture rather than as events --
+ * dozens of full-strength marks turned this into a thicket over exactly the
+ * part of the run worth watching. */
+#cine_card .timeline {
+  position: relative; height: 1.6cqh; border-radius: 0.8cqh; background: var(--sunk);
+}
+#cine_card .timeline .burn {
+  position: absolute; top: 0; bottom: 0; border-radius: 0.8cqh; background: var(--warn);
+}
+#cine_card .timeline .burn.minor {
+  top: 35%; bottom: 35%; opacity: 0.4; border-radius: 0;
+}
+#cine_card .timeline .arrival {
+  position: absolute; top: -0.7cqh; bottom: -0.7cqh; width: 0.22cqw;
+  background: var(--go);
+}
+#cine_card .timeline .head {
+  position: absolute; top: -1cqh; bottom: -1cqh; width: 0.2cqw; background: var(--ink);
+}
+
+/* The transport is the one thing here the viewer is not reading, so it is the
+ * quietest element on the card. */
+#cine_card footer {
+  flex: 0 0 auto; display: flex; align-items: center; gap: calc(var(--step) * 0.4);
+}
+#cine_card footer > button {
+  width: 4.6cqh; height: 4.6cqh; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--sunk); background: transparent; color: var(--dim);
+  font-size: 2cqh; display: grid; place-items: center;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+#cine_card footer > button:hover { color: var(--ink); border-color: var(--dim); }
+#cine_card .rates { display: flex; gap: 0.4cqw; margin-left: calc(var(--step) * 0.4); }
+#cine_card .rates button {
+  padding: 0.7cqh 1.1cqw; border-radius: 0.7cqh; cursor: pointer;
+  font-size: var(--t-label); font-variant-numeric: tabular-nums;
+  border: 1px solid transparent; background: transparent; color: var(--dim);
+}
+#cine_card .rates button[aria-pressed="true"] { color: var(--ink); background: var(--sunk); }
+#cine_card .eased {
+  margin-left: auto; font-size: var(--t-label); color: var(--dim);
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+
+/* Controls stay out of the way of a frame that is going to be recorded. */
+#cine_card .tools {
+  position: absolute; top: var(--step); right: var(--step);
+  display: flex; gap: 0.6cqw; opacity: 0.3; transition: opacity 160ms ease;
+}
+#cine_card .tools:hover, #cine_card .tools:focus-within { opacity: 1; }
+#cine_card summary, #cine_card #c_exit {
+  list-style: none; cursor: pointer; width: 4cqh; height: 4cqh;
+  display: grid; place-items: center; border: 1px solid var(--sunk);
+  border-radius: 50%; background: transparent; color: var(--dim); font-size: 2cqh;
+}
+#cine_card summary::-webkit-details-marker { display: none; }
+#cine_card details { position: relative; }
+#cine_card .menu_body {
+  position: absolute; right: 0; top: 5cqh; z-index: 5; width: 32cqw;
+  display: flex; flex-direction: column; gap: 1cqh;
+  padding: calc(var(--step) * 0.8); border: 1px solid var(--sunk);
+  border-radius: 1cqh; background: oklch(0.19 0.018 240 / 0.98);
+}
+#cine_card .menu_head {
+  margin: 0.6cqh 0 0; font-size: var(--t-label); letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--dim);
+}
+#cine_card .menu_body label {
+  display: flex; align-items: center; gap: 0.7cqw;
+  font-size: var(--t-label); letter-spacing: 0.04em; color: var(--ink);
+}
+#cine_card .menu_body input[type="range"] { flex: 1; accent-color: var(--go); }
+#cine_card .menu_body output {
+  min-width: 6ch; text-align: right; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
