@@ -96,6 +96,65 @@ the integrator, disperses the chaser with `randomize_chaser_position` from
 `orbit_utils.py`, and stops after three orbits. Sensor noise is on unless you
 uncomment the block near the top.
 
+## Getting started
+
+You need Trick, Eigen 3 and Python 3. Trick is Linux and macOS only, so this
+does not run natively on Windows.
+
+Eigen on Ubuntu is `sudo apt install libeigen3-dev`. Trick has its own install
+guide; once it is done, `trick-CP` should be on your PATH.
+
+Keep `SIM_rendezvous/` and `models/` next to each other. `S_overrides.mk` adds
+`../models` to the include path, so moving either one breaks the build.
+
+The runner script sources a virtualenv one level above the repo, so make that
+first:
+
+```
+python3 -m venv ../.venv
+source ../.venv/bin/activate
+pip install -r visualizer/requirements.txt
+```
+
+If you keep your venv somewhere else, change `VENV_ACTIVATE` at the top of
+`run_sim.sh`.
+
+Then run everything:
+
+```
+./run_sim.sh
+```
+
+It compiles with `trick-CP` if there is no executable yet, runs the sim against
+`RUN_test/input.py`, fixes the unit labels in the CSV, stamps both output files
+with a timestamped name and drops them in `visualizer/runs/`. Compiling takes a
+few minutes the first time and is skipped after that. Delete
+`SIM_rendezvous/S_main_Linux*.exe` if you change the C++ and want a rebuild.
+
+To do it by hand instead:
+
+```
+cd SIM_rendezvous
+trick-CP
+./S_main_Linux_*.exe RUN_test/input.py
+```
+
+That leaves `log_states.csv` and `run_metadata.json` in `RUN_test/`. Rename them
+to a matching pair, like `my_run.csv` and `my_run.json`, and move them into
+`visualizer/runs/`. The viewer finds runs by matching stems, so the two names
+have to agree.
+
+To look at a run:
+
+```
+cd visualizer
+streamlit run app.py
+```
+
+Pick the run from the sidebar. The `visualizer/` README covers the viewer
+itself, including publishing runs to GitHub Pages.
+
+
 ## What it does not do
 
 Attitude and pointing:
