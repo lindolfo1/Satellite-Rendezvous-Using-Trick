@@ -155,7 +155,7 @@ Pick the run from the sidebar. The `visualizer/` README covers the viewer
 itself, including publishing runs to GitHub Pages.
 
 
-## What it does not do
+## Limitations
 
 Attitude and pointing:
 
