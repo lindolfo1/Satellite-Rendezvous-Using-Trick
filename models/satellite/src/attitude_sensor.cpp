@@ -7,13 +7,7 @@
 using namespace Eigen;
 using namespace std;
 
-/*
- * Direction of a centered dipole ALIGNED with the spin axis, in ECI.
- * m points to geographic south, so mHat = -zHat and the field direction
- * 3(mHat.rHat)rHat - mHat reduces to the form below. Magnitude is not
- * modeled -- attitude uses direction only. No time argument: an untilted
- * dipole is symmetric about z, so Earth rotation leaves it unchanged.
- */
+
 static void dipoleDir_eci(const Vector3d& pos, Vector3d& magRef) {
     const Vector3d rHat = pos.normalized();
     const double   rz   = rHat(2);
@@ -22,13 +16,6 @@ static void dipoleDir_eci(const Vector3d& pos, Vector3d& magRef) {
     magRef.normalize();
 }
  
-/*
- * Corrupt a unit direction: v' = normalize(v + eps x v), with eps a
- * rotation vector of per-run bias plus white noise. Rotation about v
- * itself has no effect, which is correct -- a unit vector carries only
- * 2 DOF. Unlike the IMU there is no 1/sqrt(dTime) scaling: sigma is a
- * plain angle, not a density, so the noise is rate-independent.
- */
 static void simulateDirNoise(double sigma, const Vector3d& alignBias, Vector3d& v) {
     Vector3d noise;
     generateGaussianNoise3d(sigma, noise);
@@ -65,14 +52,7 @@ int AttitudeSensor::default_data() {
     return 0;
 }
 
-/*
- * Truth attitude is DERIVED from truth pos/vel via buildSatFrame(), the
- * same frame Satellite::update_truth_attitude() builds, so no quaternion
- * is passed in. pos_eci/vel_eci must be the TRUTH state, never a filter
- * estimate: sharing a state between sensor generation and filter
- * prediction cancels attitude error out of the innovation and makes
- * attitude unobservable by construction.
- */
+
 int AttitudeSensor::sample(const double pos_eci[3], const double vel_eci[3]) {
     timestamp = exec_get_sim_time();
     isValid   = false;              /* set true only on a clean solve */
@@ -131,7 +111,6 @@ int AttitudeSensor::sample(const double pos_eci[3], const double vel_eci[3]) {
     qMeas[2] = qOut.y();
     qMeas[3] = qOut.z();
 
-    /* Anisotropic by construction. Rotation perpendicular to the sun line is pinned by the sun sensor; rotation ABOUT it is invisible to the sun sensor and resolved only by the magnetometer, degraded by 1/sin geometryAngle). An isotropic sigma^2*I here would make the filter overconfident about exactly the worst axis. */
     const Matrix3d ssT = sunBody * sunBody.transpose();
     const double varPerp = sunSigma * sunSigma;
     const double sigAbout = magSigma / sinGeom;
