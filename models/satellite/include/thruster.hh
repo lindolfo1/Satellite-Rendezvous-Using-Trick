@@ -7,16 +7,6 @@ PURPOSE: Simulates the thruster scheduler and the acceleration due to the thrust
 
 #include <queue>
 
-/******************************* TRICK HEADER ****************************
-NOTE ON THE STL member: Trick's checkpoint agent handles std::queue when
-it is nested in a class the memory manager knows about, so the schedule
-survives checkpoint/restore. It is NOT visible to data recording, the
-variable server, or the input processor -- unlike a fixed array. The
-scalars below (numQueued, dVAccumulated, isFiring) are plain types
-specifically so the queue's state stays observable in run data.
-
-Burns must be enqueued in non-decreasing startTime order.
-*************************************************************************/
 class Thruster {
     public:
         enum {MAX_BURNS = 16};
