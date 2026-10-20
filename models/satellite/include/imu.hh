@@ -6,13 +6,7 @@ PURPOSE: IMU -- strapdown inertial measurement unit.
 #define IMU_HH
 
 /*========================================================================
- * IMU -- strapdown inertial measurement unit.
- *
- * dTheta is a delta-ANGLE (rad) over dTime, not a rate. dVel is SPECIFIC
- * FORCE (gravity removed), so it reads ~0 in free fall.
- *
- * Nothing consumes dTheta/dVel yet. dTheta is the input to the attitude
- * filter when that is written; dVel is the input to thrust sensing.
+ * IMU -- inertial measurement unit.
  *=======================================================================*/
 class IMU {
     public:
