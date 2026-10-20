@@ -10,8 +10,7 @@ using namespace std;
 
 /*
  * Gravitational acceleration at an ECI position (m/s2).
- * MUST match Satellite::derivative(). Any difference shows up in dVel as
- * a phantom thrust the filter cannot explain.
+ * MUST match Satellite::derivative(). 
  */
 static void gravityAccel(const Vector3d& pos, bool useJ2, Vector3d& ag) {
     const double r2 = pos.squaredNorm();
@@ -90,11 +89,6 @@ int IMU::sample_imu(double x1[3], double x2[3], double x3[3]) {
     const Vector3d v2 = (x3v - x2v) / dTime;
     Vector3d dv = v2 - v1;
 
-    /* The centered second difference gives TOTAL acceleration * dTime
-       (gravity + thrust). An accelerometer senses specific force only, so
-       remove the modeled gravitational delta-velocity; a coasting vehicle
-       then reads ~0. Gravity is evaluated at x2 because the second
-       difference is centered on the middle sample. */
     Vector3d ag;
     gravityAccel(x2v, j2Enabled, ag);
     dv -= ag * dTime;
@@ -113,11 +107,7 @@ int IMU::sample_imu(double x1[3], double x2[3], double x3[3]) {
         simulateGyroNoise(arw, dTime, gb, w);
         simulateAccelNoise(vrw, dTime, ab, dv);
     }
-
-    /* wFromR returns a RATE, but dTheta is a delta-ANGLE and is consumed
-       as one (small-angle quaternion). Multiply by dTime, or the attitude
-       integrates 1/dTime times too fast. This also keeps a gyro-bias
-       correction dimensionally consistent: dTheta - bias*dTime is rad. */
+    
     for (int i = 0; i < 3; i++) {
         dTheta[i] = w(i) * dTime;
         dVel[i]   = dv(i);
