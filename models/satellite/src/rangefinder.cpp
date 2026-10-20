@@ -31,10 +31,6 @@ int Rangefinder::default_data() {
  *   posChaser -- chaser TRUTH position, ECI (m)
  *   qChaser   -- chaser TRUTH attitude, body->ECI, scalar-first (--)
  *   posTarget -- target TRUTH position, ECI (m)
- *
- * qChaser must be the truth attitude, never a filter estimate: real
- * hardware measures what the vehicle actually points at, and feeding an
- * estimate here cancels attitude error out of the innovation.
  */
 int Rangefinder::track(const double posChaser[3], const double qChaser[4],
                        const double posTarget[3]) {
