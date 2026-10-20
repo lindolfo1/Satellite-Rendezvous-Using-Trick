@@ -167,7 +167,7 @@ Orbits:
 
 - Everything relative is Clohessy-Wiltshire, so this only holds for a
   near-circular target orbit, close range and roughly the same plane.
-- `input.py` runs equatorial, which is the worst case for the attitude sensor.
+- `input.py` runs equatorial.
   The sun and field directions stay 90 degrees apart the whole run, so the weak
   axis of the attitude covariance never gets tested.
 
