@@ -7,12 +7,6 @@ PURPOSE: Rangefinder -- body-fixed range + bearing sensor.
 
 /*========================================================================
  * Rangefinder -- body-fixed range + bearing sensor.
- *
- * Truth measurement generation. Must be driven by the TRUTH attitude
- * (q_eci2body_truth), never by a filter estimate: real hardware sees what
- * the vehicle is actually pointing at. Sharing one quaternion between
- * sensor generation and filter prediction cancels attitude error out of
- * the innovation and makes the attitude unobservable by construction.
  *=======================================================================*/
 class Rangefinder {
     public:
